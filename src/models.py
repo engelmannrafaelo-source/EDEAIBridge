@@ -1,0 +1,288 @@
+from typing import List, Optional, Dict, Any, Union, Literal
+from pydantic import BaseModel, Field, field_validator, model_validator
+from enum import Enum
+from datetime import datetime
+import uuid
+
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
+class ContentPart(BaseModel):
+    """Content part for multimodal messages (OpenAI format)."""
+    type: Literal["text"]
+    text: str
+
+
+class Message(BaseModel):
+    role: Literal["system", "user", "assistant"]
+    content: Union[str, List[ContentPart]]
+    name: Optional[str] = None
+    
+    @model_validator(mode='after')
+    def normalize_content(self):
+        """Convert array content to string for Claude Code compatibility."""
+        if isinstance(self.content, list):
+            # Extract text from content parts and concatenate
+            text_parts = []
+            for part in self.content:
+                if isinstance(part, ContentPart) and part.type == "text":
+                    text_parts.append(part.text)
+                elif isinstance(part, dict) and part.get("type") == "text":
+                    text_parts.append(part.get("text", ""))
+            
+            # Join all text parts with newlines
+            self.content = "\n".join(text_parts) if text_parts else ""
+            
+        return self
+
+
+class ChatCompletionRequest(BaseModel):
+    model: str
+    messages: List[Message]
+    temperature: Optional[float] = Field(default=1.0, ge=0, le=2)
+    top_p: Optional[float] = Field(default=1.0, ge=0, le=1)
+    n: Optional[int] = Field(default=1, ge=1)
+    stream: Optional[bool] = False
+    stop: Optional[Union[str, List[str]]] = None
+    max_tokens: Optional[int] = None
+    presence_penalty: Optional[float] = Field(default=0, ge=-2, le=2)
+    frequency_penalty: Optional[float] = Field(default=0, ge=-2, le=2)
+    logit_bias: Optional[Dict[str, float]] = None
+    user: Optional[str] = None
+    session_id: Optional[str] = Field(default=None, description="Optional session ID for conversation continuity")
+    enable_tools: Optional[bool] = Field(default=False, description="Enable Claude Code tools (Read, Write, Bash, etc.) - disabled by default for OpenAI compatibility")
+    
+    @field_validator('n')
+    @classmethod
+    def validate_n(cls, v):
+        if v > 1:
+            raise ValueError("Claude Code SDK does not support multiple choices (n > 1). Only single response generation is supported.")
+        return v
+    
+    def log_unsupported_parameters(self):
+        """Log warnings for parameters that are not supported by Claude Code SDK."""
+        warnings = []
+        
+        if self.temperature != 1.0:
+            warnings.append(f"temperature={self.temperature} is not supported by Claude Code SDK and will be ignored")
+        
+        if self.top_p != 1.0:
+            warnings.append(f"top_p={self.top_p} is not supported by Claude Code SDK and will be ignored")
+            
+        if self.max_tokens is not None:
+            warnings.append(f"max_tokens={self.max_tokens} is not supported by Claude Code SDK and will be ignored. Consider using max_turns to limit conversation length")
+        
+        if self.presence_penalty != 0:
+            warnings.append(f"presence_penalty={self.presence_penalty} is not supported by Claude Code SDK and will be ignored")
+            
+        if self.frequency_penalty != 0:
+            warnings.append(f"frequency_penalty={self.frequency_penalty} is not supported by Claude Code SDK and will be ignored")
+            
+        if self.logit_bias:
+            warnings.append(f"logit_bias is not supported by Claude Code SDK and will be ignored")
+            
+        if self.stop:
+            warnings.append(f"stop sequences are not supported by Claude Code SDK and will be ignored")
+        
+        for warning in warnings:
+            logger.warning(f"OpenAI API compatibility: {warning}")
+    
+    def to_claude_options(self) -> Dict[str, Any]:
+        """Convert OpenAI request parameters to Claude Code SDK options."""
+        # Log warnings for unsupported parameters
+        self.log_unsupported_parameters()
+        
+        options = {}
+        
+        # Direct mappings
+        if self.model:
+            options['model'] = self.model
+            
+        # Use user field for session identification if provided
+        if self.user:
+            # Could be used for analytics/logging or session tracking
+            logger.info(f"Request from user: {self.user}")
+        
+        return options
+
+
+class Choice(BaseModel):
+    index: int
+    message: Message
+    finish_reason: Optional[Literal["stop", "length", "content_filter", "null"]] = None
+
+
+class Usage(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+
+
+class ChatCompletionResponse(BaseModel):
+    id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4().hex}")
+    object: Literal["chat.completion"] = "chat.completion"
+    created: int = Field(default_factory=lambda: int(datetime.now().timestamp()))
+    model: str
+    choices: List[Choice]
+    usage: Optional[Usage] = None
+    system_fingerprint: Optional[str] = None
+
+
+class StreamChoice(BaseModel):
+    index: int
+    delta: Dict[str, Any]
+    finish_reason: Optional[Literal["stop", "length", "content_filter", "null"]] = None
+
+
+class ChatCompletionStreamResponse(BaseModel):
+    id: str = Field(default_factory=lambda: f"chatcmpl-{uuid.uuid4().hex}")
+    object: Literal["chat.completion.chunk"] = "chat.completion.chunk"
+    created: int = Field(default_factory=lambda: int(datetime.now().timestamp()))
+    model: str
+    choices: List[StreamChoice]
+    system_fingerprint: Optional[str] = None
+
+
+class ErrorDetail(BaseModel):
+    message: str
+    type: str
+    param: Optional[str] = None
+    code: Optional[str] = None
+
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+
+
+class SessionInfo(BaseModel):
+    session_id: str
+    created_at: datetime
+    last_accessed: datetime
+    message_count: int
+    expires_at: datetime
+
+
+class SessionListResponse(BaseModel):
+    sessions: List[SessionInfo]
+    total: int
+
+
+# ============================================================================
+# Research Endpoint Models
+# ============================================================================
+
+class ResearchRequest(BaseModel):
+    """
+    Request model for dedicated /v1/research endpoint.
+
+    Designed for Claude Code research tasks with SuperClaude integration.
+    Supports depth levels, planning strategies, and advanced research options.
+    """
+    # Core Research Parameters
+    query: str = Field(..., description="Research question or topic to investigate")
+
+    # Model Configuration
+    model: Optional[str] = Field(
+        default="claude-sonnet-4-5-20250929",
+        description="Claude model to use for research"
+    )
+
+    # Output Configuration
+    output_path: Optional[str] = Field(
+        default=None,
+        description="Host filesystem path where research report should be saved. If not provided, saves to /tmp/"
+    )
+
+    # SuperClaude Research Depth
+    depth: Optional[Literal["quick", "standard", "deep", "exhaustive"]] = Field(
+        default="standard",
+        description="Research depth: quick (1-2min, 1 hop), standard (3-5min, 2-3 hops), deep (5-8min, 3-4 hops), exhaustive (8-15min, 5 hops)"
+    )
+
+    # SuperClaude Planning Strategy
+    strategy: Optional[Literal["planning", "intent", "unified"]] = Field(
+        default="unified",
+        description="Planning strategy: planning (immediate execution), intent (clarification first), unified (collaborative planning)"
+    )
+
+    # Advanced Research Options
+    max_hops: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=5,
+        description="Maximum research hops (overrides depth setting). 1-5 hops for multi-hop exploration"
+    )
+
+    confidence_threshold: Optional[float] = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence score for research quality (0.0-1.0)"
+    )
+
+    parallel_searches: Optional[int] = Field(
+        default=5,
+        ge=1,
+        le=5,
+        description="Maximum concurrent searches (1-5). Higher = faster but more resource intensive"
+    )
+
+    source_filter: Optional[List[Literal["tier_1", "tier_2", "tier_3", "tier_4"]]] = Field(
+        default=None,
+        description="Filter sources by credibility tier. tier_1=academic/official, tier_2=established media, tier_3=community, tier_4=forums"
+    )
+
+    # Claude Code SDK Options
+    max_tokens: Optional[int] = Field(
+        default=4000,
+        description="Maximum tokens for response generation"
+    )
+
+    temperature: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=2,
+        description="Temperature for response generation (currently not supported by Claude Code SDK)"
+    )
+
+    max_turns: Optional[int] = Field(
+        default=30,
+        description="Maximum conversation turns for research task (increased for deep research)"
+    )
+
+
+class ResearchResponse(BaseModel):
+    """
+    Response model for research endpoint.
+
+    Returns both container and host file paths, plus execution metadata.
+    """
+    status: Literal["success", "error"]
+    query: str
+    model: str
+    output_file: Optional[str] = Field(
+        default=None,
+        description="Host filesystem path where research report was saved"
+    )
+    container_file: Optional[str] = Field(
+        default=None,
+        description="Container filesystem path where research was generated"
+    )
+    execution_time_seconds: Optional[float] = Field(
+        default=None,
+        description="Time taken to complete research in seconds"
+    )
+    file_size_bytes: Optional[int] = Field(
+        default=None,
+        description="Size of generated research report in bytes"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if status is 'error'"
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Claude Code session ID used for research"
+    )

@@ -1,0 +1,271 @@
+"""
+Privacy Middleware for FastAPI
+
+Transparent middleware that automatically anonymizes user messages before
+sending to Claude and de-anonymizes responses before returning to client.
+
+Flow:
+  User Message → [Anonymize] → Claude → [De-Anonymize] → Response
+"""
+
+import os
+import logging
+import asyncio
+from typing import Dict, Optional, List, Any, Callable
+from contextvars import ContextVar
+from functools import wraps
+
+from .anonymizer import PresidioAnonymizer, AnonymizationResult
+
+logger = logging.getLogger(__name__)
+
+# Context variable to store anonymization mapping per request
+_anonymization_context: ContextVar[Optional[Dict[str, str]]] = ContextVar(
+    'anonymization_mapping',
+    default=None
+)
+
+
+class PrivacyMiddleware:
+    """
+    DSGVO-compliant privacy middleware for message anonymization.
+
+    This middleware transparently processes all messages:
+    1. BEFORE Claude: Anonymizes user messages (replaces PII with ANON_XXX)
+    2. AFTER Claude: De-anonymizes response (restores original PII)
+
+    Configuration via environment variables:
+    - PRIVACY_ENABLED: Enable/disable privacy middleware (default: true)
+    - PRIVACY_LANGUAGE: Default language for PII detection (default: de)
+    - PRIVACY_LOG_DETECTIONS: Log detected entities (default: false, for debugging)
+    """
+
+    def __init__(
+        self,
+        enabled: Optional[bool] = None,
+        language: str = 'de',
+        log_detections: bool = False
+    ):
+        """
+        Initialize privacy middleware.
+
+        Args:
+            enabled: Enable/disable middleware. If None, reads from PRIVACY_ENABLED env var.
+            language: Default language for PII detection ('de' or 'en')
+            log_detections: Log detected entities (useful for debugging, disable in production)
+        """
+        # Read from environment if not explicitly set
+        if enabled is None:
+            enabled = os.getenv('PRIVACY_ENABLED', 'true').lower() in ('true', '1', 'yes', 'on')
+
+        self.enabled = enabled
+        self.language = os.getenv('PRIVACY_LANGUAGE', language)
+        self.log_detections = os.getenv('PRIVACY_LOG_DETECTIONS', str(log_detections)).lower() in ('true', '1', 'yes')
+
+        # Lazy-initialize anonymizer
+        self._anonymizer: Optional[PresidioAnonymizer] = None
+
+        if self.enabled:
+            logger.info(f"Privacy middleware enabled (language={self.language})")
+        else:
+            logger.info("Privacy middleware disabled")
+
+    @property
+    def anonymizer(self) -> PresidioAnonymizer:
+        """Get or create anonymizer instance."""
+        if self._anonymizer is None:
+            self._anonymizer = PresidioAnonymizer(language=self.language)
+        return self._anonymizer
+
+    def is_available(self) -> bool:
+        """Check if privacy middleware is available and enabled."""
+        if not self.enabled:
+            return False
+        return self.anonymizer.is_available
+
+    def anonymize_message(self, content: str) -> tuple[str, Dict[str, str]]:
+        """
+        Anonymize a single message content.
+
+        Args:
+            content: Message content to anonymize
+
+        Returns:
+            Tuple of (anonymized_content, mapping)
+        """
+        if not self.enabled or not content:
+            return content, {}
+
+        try:
+            result = self.anonymizer.anonymize(content, self.language)
+
+            if self.log_detections and result.detected_entities:
+                logger.info(
+                    f"PII detected: {result.entity_count} entities",
+                    extra={
+                        'entity_types': [e.entity_type for e in result.detected_entities],
+                        'language': result.language
+                    }
+                )
+
+            return result.anonymized_text, result.mapping
+
+        except Exception as e:
+            logger.error(f"Anonymization failed: {e}", exc_info=True)
+            # Fail open: return original content if anonymization fails
+            # This ensures the service remains available
+            return content, {}
+
+    def anonymize_messages(
+        self,
+        messages: List[Dict[str, Any]]
+    ) -> tuple[List[Dict[str, Any]], Dict[str, str]]:
+        """
+        Anonymize all user messages in a message list.
+
+        Only user messages are anonymized. System and assistant messages
+        are passed through unchanged.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+
+        Returns:
+            Tuple of (anonymized_messages, combined_mapping)
+        """
+        if not self.enabled:
+            return messages, {}
+
+        combined_mapping: Dict[str, str] = {}
+        anonymized_messages = []
+
+        for msg in messages:
+            role = msg.get('role', '')
+            content = msg.get('content', '')
+
+            # Only anonymize user messages
+            if role == 'user' and isinstance(content, str):
+                anon_content, mapping = self.anonymize_message(content)
+                combined_mapping.update(mapping)
+
+                anonymized_messages.append({
+                    **msg,
+                    'content': anon_content
+                })
+            else:
+                anonymized_messages.append(msg)
+
+        if combined_mapping:
+            logger.debug(f"Anonymized {len(combined_mapping)} entities across messages")
+
+        return anonymized_messages, combined_mapping
+
+    def deanonymize_response(self, content: str, mapping: Optional[Dict[str, str]] = None) -> str:
+        """
+        De-anonymize response content using stored or provided mapping.
+
+        Args:
+            content: Response content with ANON_XXX placeholders
+            mapping: Mapping dict. If None, uses context variable.
+
+        Returns:
+            Original content with PII restored
+        """
+        if not self.enabled or not content:
+            return content
+
+        # Use provided mapping or get from context
+        if mapping is None:
+            mapping = _anonymization_context.get()
+
+        if not mapping:
+            return content
+
+        try:
+            return self.anonymizer.deanonymize(content, mapping)
+        except Exception as e:
+            logger.error(f"De-anonymization failed: {e}", exc_info=True)
+            return content
+
+    def set_context_mapping(self, mapping: Dict[str, str]) -> None:
+        """Store mapping in request context for later de-anonymization."""
+        _anonymization_context.set(mapping)
+
+    def get_context_mapping(self) -> Optional[Dict[str, str]]:
+        """Get mapping from request context."""
+        return _anonymization_context.get()
+
+    def clear_context_mapping(self) -> None:
+        """Clear mapping from request context."""
+        _anonymization_context.set(None)
+
+
+# Singleton instance
+_privacy_middleware: Optional[PrivacyMiddleware] = None
+
+
+def get_privacy_middleware() -> PrivacyMiddleware:
+    """
+    Get the singleton privacy middleware instance.
+
+    Returns:
+        PrivacyMiddleware instance (created on first call)
+    """
+    global _privacy_middleware
+    if _privacy_middleware is None:
+        _privacy_middleware = PrivacyMiddleware()
+    return _privacy_middleware
+
+
+def anonymize_request(func: Callable) -> Callable:
+    """
+    Decorator for endpoint functions that handles anonymization/de-anonymization.
+
+    Usage:
+        @app.post("/v1/chat/completions")
+        @anonymize_request
+        async def chat_completions(request_body: ChatCompletionRequest, ...):
+            ...
+    """
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        middleware = get_privacy_middleware()
+
+        if not middleware.enabled:
+            return await func(*args, **kwargs)
+
+        # Find request_body in kwargs or args
+        request_body = kwargs.get('request_body')
+        if request_body is None and len(args) > 0:
+            request_body = args[0]
+
+        # Anonymize messages if present
+        if hasattr(request_body, 'messages') and request_body.messages:
+            original_messages = [
+                {'role': m.role, 'content': m.content}
+                for m in request_body.messages
+            ]
+            anon_messages, mapping = middleware.anonymize_messages(original_messages)
+
+            # Store mapping for response de-anonymization
+            middleware.set_context_mapping(mapping)
+
+            # Update request messages (create new Message objects)
+            from src.models import Message
+            request_body.messages = [
+                Message(role=m['role'], content=m['content'])
+                for m in anon_messages
+            ]
+
+        try:
+            # Call original function
+            result = await func(*args, **kwargs)
+
+            # De-anonymize response if needed
+            # This is handled in the streaming generator or response processing
+            return result
+
+        finally:
+            # Clean up context
+            middleware.clear_context_mapping()
+
+    return wrapper

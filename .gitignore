@@ -1,0 +1,90 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+ENV/
+env/
+.venv
+
+# Poetry
+poetry.lock
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Logs - ALL log files including rotations (.log, .log.1, .log.2, etc.)
+logs/*.log*
+tests/logs/*.log*
+
+# Keep log directory structure
+!logs/.gitkeep
+!tests/logs/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+tests/temp_test_output/
+
+# Claude Code - Research Files (not structure)
+# Ignore research files in root claudedocs
+/claudedocs/*.md
+/claudedocs/**/*.md
+/claudedocs/**/*.json
+
+# Session Directories: Ignore timestamp-based session directories (YYYY-MM-DD-HHMM_{uuid})
+# Pattern: 2025-11-07-1200_a1b2c3d4-...
+202[0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]_*/
+
+# Instances: Ignore all session directories
+instances/*/*/
+!instances/*/.gitkeep
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# PID files (runtime only)
+.wrapper-*.pid
+
+# Claude Code config
+.claude/
+
+# Secrets & SuperClaude
+secrets/
+superclaude/

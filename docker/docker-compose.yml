@@ -1,0 +1,87 @@
+services:
+  # EDEAIBridge - OpenAI-compatible Claude Gateway
+  edeaibridge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: edeaibridge
+
+    # Port mapping
+    ports:
+      - "8000:8000"
+
+    # Memory limit: 4 GB
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+    # Persistent storage
+    volumes:
+      - edeaibridge-logs:/app/logs
+      - edeaibridge-instances:/app/instances
+      - ~/edeaibridge-research-output:/app/research_output
+
+    # OAuth Token via Secret
+    secrets:
+      - claude_token
+
+    environment:
+      # Token aus Secret lesen (SDK unterstützt file-basiertes Token)
+      - CLAUDE_CODE_OAUTH_TOKEN_FILE=/run/secrets/claude_token
+
+      # Timezone
+      - TZ=Europe/Vienna
+
+      # Logging
+      - LOG_LEVEL=INFO
+      - LOG_TO_FILE=true
+      - FILTER_SENSITIVE_DATA=true
+
+      # Instance Name
+      - INSTANCE_NAME=edeaibridge
+
+      # Working Directory (for session isolation)
+      - CLAUDE_CWD=/app/instances
+
+      # Timeout (40 min for research)
+      - MAX_TIMEOUT=2400000
+
+      # Permissions (bypassPermissions for autonomous research)
+      - CLAUDE_PERMISSION_MODE=bypassPermissions
+
+      # MCP API Keys
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+
+      # Privacy/DSGVO (Presidio-based PII anonymization)
+      - PRIVACY_ENABLED=true
+      - PRIVACY_LANGUAGE=de
+      - PRIVACY_LOG_DETECTIONS=false
+
+    # Health Check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Graceful Shutdown
+    stop_grace_period: 15s
+
+    # Restart Policy
+    restart: unless-stopped
+
+# Named Volumes
+volumes:
+  edeaibridge-logs:
+    driver: local
+  edeaibridge-instances:
+    driver: local
+
+# Secrets
+secrets:
+  claude_token:
+    file: ../secrets/claude_token.txt

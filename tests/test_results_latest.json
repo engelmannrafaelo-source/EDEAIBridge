@@ -1,0 +1,218 @@
+[
+  {
+    "instance": "Instance on port 8000",
+    "port": 8000,
+    "base_url": "http://localhost:8000",
+    "tests": {
+      "health": {
+        "status": 200,
+        "data": {
+          "status": "healthy",
+          "service": "claude-code-openai-wrapper"
+        }
+      },
+      "models": {
+        "status": 200,
+        "count": 6,
+        "models": [
+          "claude-sonnet-4-5-20250929",
+          "claude-sonnet-4-20250514",
+          "claude-opus-4-20250514",
+          "claude-3-7-sonnet-20250219",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022"
+        ]
+      },
+      "chat": {
+        "status": 200,
+        "joke": "Warum hat die REST API Schluss gemacht?\n\nSie hat gesagt: \"Es ist nicht du, es ist meine `503 Service Unavailable`\" 😄",
+        "usage": {
+          "prompt_tokens": 17,
+          "completion_tokens": 29,
+          "total_tokens": 46
+        }
+      }
+    },
+    "timestamp": "2025-10-13T14:44:37.175607"
+  },
+  {
+    "instance": "Instance on port 8010",
+    "port": 8010,
+    "base_url": "http://localhost:8010",
+    "tests": {
+      "health": {
+        "status": 200,
+        "data": {
+          "status": "healthy",
+          "service": "claude-code-openai-wrapper"
+        }
+      },
+      "models": {
+        "status": 200,
+        "count": 6,
+        "models": [
+          "claude-sonnet-4-5-20250929",
+          "claude-sonnet-4-20250514",
+          "claude-opus-4-20250514",
+          "claude-3-7-sonnet-20250219",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022"
+        ]
+      },
+      "chat": {
+        "status": 200,
+        "joke": "Warum haben RESTful APIs keine Beziehungsprobleme?\n\nWeil sie zustandslos sind. 🤷‍♂️",
+        "usage": {
+          "prompt_tokens": 17,
+          "completion_tokens": 20,
+          "total_tokens": 37
+        }
+      }
+    },
+    "timestamp": "2025-10-13T14:45:12.669376"
+  },
+  {
+    "instance": "Instance on port 8010",
+    "port": 8010,
+    "base_url": "http://localhost:8010",
+    "tests": {
+      "health": {
+        "status": 200,
+        "data": {
+          "status": "healthy",
+          "service": "claude-code-openai-wrapper"
+        }
+      },
+      "models": {
+        "status": 200,
+        "count": 6,
+        "models": [
+          "claude-sonnet-4-5-20250929",
+          "claude-sonnet-4-20250514",
+          "claude-opus-4-20250514",
+          "claude-3-7-sonnet-20250219",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022"
+        ]
+      },
+      "chat": {
+        "status": 200,
+        "joke": "Warum haben Python-Entwickler keine Beziehungsprobleme?\n\nWeil sie mit `try/except` umgehen können – und wenn's nicht klappt, einfach `pass`. 🐍",
+        "usage": {
+          "prompt_tokens": 17,
+          "completion_tokens": 35,
+          "total_tokens": 52
+        }
+      }
+    },
+    "timestamp": "2025-10-13T14:45:48.649213"
+  },
+  {
+    "instance": "Instance on port 8010",
+    "port": 8010,
+    "base_url": "http://localhost:8010",
+    "tests": {
+      "health": {
+        "status": 200,
+        "data": {
+          "status": "healthy",
+          "service": "claude-code-openai-wrapper"
+        }
+      },
+      "models": {
+        "status": 200,
+        "count": 6,
+        "models": [
+          "claude-sonnet-4-5-20250929",
+          "claude-sonnet-4-20250514",
+          "claude-opus-4-20250514",
+          "claude-3-7-sonnet-20250219",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022"
+        ]
+      },
+      "chat": {
+        "status": 200,
+        "joke": "Warum haben REST APIs keine Beziehungsprobleme?\n\nWeil sie zustandslos sind! 💔",
+        "usage": {
+          "prompt_tokens": 17,
+          "completion_tokens": 19,
+          "total_tokens": 36
+        }
+      }
+    },
+    "timestamp": "2025-10-13T14:46:24.728257"
+  },
+  {
+    "instance": "Instance on port 8010",
+    "port": 8010,
+    "base_url": "http://localhost:8010",
+    "tests": {
+      "health": {
+        "status": 200,
+        "data": {
+          "status": "healthy",
+          "service": "claude-code-openai-wrapper"
+        }
+      },
+      "models": {
+        "status": 200,
+        "count": 6,
+        "models": [
+          "claude-sonnet-4-5-20250929",
+          "claude-sonnet-4-20250514",
+          "claude-opus-4-20250514",
+          "claude-3-7-sonnet-20250219",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022"
+        ]
+      },
+      "chat": {
+        "status": 200,
+        "joke": "Warum verwenden Python-Entwickler keine `try-except`-Blöcke?\n\nWeil sie lieber `pass` sagen als über ihre Fehler zu reden. 🐍",
+        "usage": {
+          "prompt_tokens": 17,
+          "completion_tokens": 30,
+          "total_tokens": 47
+        }
+      }
+    },
+    "timestamp": "2025-10-13T14:47:00.456199"
+  },
+  {
+    "instance": "Instance on port 8020",
+    "port": 8020,
+    "base_url": "http://localhost:8020",
+    "tests": {
+      "health": {
+        "status": 200,
+        "data": {
+          "status": "healthy",
+          "service": "claude-code-openai-wrapper"
+        }
+      },
+      "models": {
+        "status": 200,
+        "count": 6,
+        "models": [
+          "claude-sonnet-4-5-20250929",
+          "claude-sonnet-4-20250514",
+          "claude-opus-4-20250514",
+          "claude-3-7-sonnet-20250219",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022"
+        ]
+      },
+      "chat": {
+        "status": 200,
+        "joke": "Warum hat der REST API-Entwickler seinen Job verloren?\n\nEr konnte einfach nicht mit seinen 418 I'm a teapot Responses aufhören. 🫖",
+        "usage": {
+          "prompt_tokens": 17,
+          "completion_tokens": 32,
+          "total_tokens": 49
+        }
+      }
+    },
+    "timestamp": "2025-10-13T14:47:36.459932"
+  }
+]
